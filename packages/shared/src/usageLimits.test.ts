@@ -446,6 +446,70 @@ describe("pools", () => {
     ]);
   });
 
+  it("keeps one email signed in to two orgs as two accounts", () => {
+    const personal = provider({
+      driver: claude,
+      instanceId: ProviderInstanceId.make("claude"),
+      auth: { status: "authenticated", email: "same@example.com", organization: "Personal" },
+      usageLimits: { checkedAt, windows: [{ ...window, usedPercent: 36 }] },
+    });
+    const work = {
+      ...personal,
+      instanceId: ProviderInstanceId.make("work"),
+      auth: { status: "authenticated" as const, email: "same@example.com", organization: "Acme" },
+      usageLimits: { checkedAt, windows: [{ ...window, usedPercent: 2 }] },
+    };
+    const input = new Map([
+      [EnvironmentId.make("env-a"), { ...laptop, serverConfig: { providers: [personal, work] } }],
+    ]);
+    expect(
+      collectLimitAccounts(input).map((account) => [
+        account.key,
+        account.limits.windows[0]?.usedPercent,
+      ]),
+    ).toEqual([
+      ["env-a:claude", 36],
+      ["env-a:work", 2],
+    ]);
+  });
+
+  it("joins a hub account to the native org only when one org uses the email", () => {
+    const native = provider({
+      driver: claude,
+      instanceId: ProviderInstanceId.make("claude"),
+      auth: { status: "authenticated", email: "same@example.com", organization: "Acme" },
+      usageLimits: { checkedAt, windows: [window] },
+    });
+    const hub = {
+      ...source,
+      accounts: [
+        {
+          id: "claude-same@example.com.json",
+          driver: claude,
+          email: "same@example.com",
+          usageLimits: { checkedAt, windows: [window] },
+        },
+      ],
+    };
+    const accountsFor = (providers: ServerProvider[]) =>
+      collectLimitAccounts(
+        new Map([
+          [
+            EnvironmentId.make("env-a"),
+            { ...laptop, serverConfig: { providers, usageLimitSources: [hub] } },
+          ],
+        ]),
+      );
+    expect(accountsFor([native])).toHaveLength(1);
+    // With two orgs the hub cannot say which it read, so it stays its own row.
+    const otherOrg = {
+      ...native,
+      instanceId: ProviderInstanceId.make("work"),
+      auth: { ...native.auth, organization: "Personal" },
+    };
+    expect(accountsFor([native, otherOrg])).toHaveLength(3);
+  });
+
   it("keys a hub account without an email by hub, so two environments on one hub share it", () => {
     const seat = {
       id: "claude-team-seat.json",
