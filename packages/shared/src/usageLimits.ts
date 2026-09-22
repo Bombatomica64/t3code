@@ -150,10 +150,22 @@ function accountKey(
 }
 
 /**
+ * One email can belong to several orgs, each with its own quota, so a native
+ * login that names its org is keyed by it too. Hubs report no org; see
+ * `collectLimitAccounts` for how they are matched.
+ */
+function nativeAccountKey(provider: ServerProvider): string | null {
+  const key = accountKey(provider.driver, provider.auth.email, provider.usageLimits);
+  const organization = provider.auth.organization?.trim().toLowerCase();
+  return key && organization ? `${key}:${organization}` : key;
+}
+
+/**
  * One subscription account as the pooled views see it, whichever way it was
- * reported. Matching emails or credentials across environments name
- * one account. Its quota is one bucket, so counting it twice would misstate
- * what is left.
+ * reported. Matching emails or credentials across environments name one
+ * account, and so does a hub report of a native one. Its quota is one bucket,
+ * so counting it twice would misstate what is left. The same email in two orgs
+ * is two accounts with separate quotas.
  */
 export interface LimitAccount {
   readonly key: string;
@@ -246,26 +258,31 @@ export function collectLimitAccounts(presentations: LimitPresentations): readonl
       },
     });
   };
+  // Native keys seen per email, so a hub account (which names no org) joins
+  // the native one only when exactly one org is signed in with that email.
+  const nativeKeysByEmail = new Map<string, Set<string>>();
   for (const [environmentId, presentation] of presentations) {
     const label = presentation.entry.target.label;
     for (const provider of providersWithLimits(presentation.serverConfig?.providers ?? [])) {
       if (!provider.usageLimits || limitsNotice(provider.usageLimits) !== null) continue;
-      merge(
-        accountKey(provider.driver, provider.auth.email, provider.usageLimits) ??
-          `${environmentId}:${provider.instanceId}`,
-        {
-          key: `${environmentId}:${provider.instanceId}`,
-          driver: provider.driver,
-          displayName: provider.displayName?.trim() || null,
-          email: provider.auth.email,
-          plan: provider.auth.label,
-          accentColor: provider.accentColor,
-          environments: [{ environmentId, label }],
-          sourceLabel: null,
-          redeem: { environmentId, input: { instanceId: provider.instanceId } },
-          limits: provider.usageLimits,
-        },
-      );
+      const emailKey = accountKey(provider.driver, provider.auth.email, provider.usageLimits);
+      const key = nativeAccountKey(provider);
+      if (emailKey && key) {
+        const keys = nativeKeysByEmail.get(emailKey) ?? new Set<string>();
+        nativeKeysByEmail.set(emailKey, keys.add(key));
+      }
+      merge(key ?? `${environmentId}:${provider.instanceId}`, {
+        key: `${environmentId}:${provider.instanceId}`,
+        driver: provider.driver,
+        displayName: provider.displayName?.trim() || null,
+        email: provider.auth.email,
+        plan: provider.auth.label,
+        accentColor: provider.accentColor,
+        environments: [{ environmentId, label }],
+        sourceLabel: null,
+        redeem: { environmentId, input: { instanceId: provider.instanceId } },
+        limits: provider.usageLimits,
+      });
     }
   }
   // Every hub account, including those a native instance also knows: the hub
@@ -279,31 +296,30 @@ export function collectLimitAccounts(presentations: LimitPresentations): readonl
         : source.label;
       for (const account of source.accounts) {
         if (limitsNotice(account.usageLimits) !== null) continue;
-        merge(
-          accountKey(account.driver, account.email, account.usageLimits) ??
-            `${source.id}:${account.id}`,
-          {
-            key: `${source.id}:${account.id}`,
-            driver: account.driver,
-            displayName: account.email ? null : account.id.replace(/\.json$/i, ""),
-            email: account.email,
-            plan: account.plan,
-            accentColor: undefined,
-            environments: [],
-            sourceLabel,
-            redeem: account.usageLimits.resetCredits?.nextCreditId
-              ? {
-                  environmentId,
-                  input: {
-                    sourceId: source.id,
-                    accountId: account.id,
-                    creditId: account.usageLimits.resetCredits.nextCreditId,
-                  },
-                }
-              : null,
-            limits: account.usageLimits,
-          },
-        );
+        const emailKey = accountKey(account.driver, account.email, account.usageLimits);
+        const nativeKeys = emailKey ? nativeKeysByEmail.get(emailKey) : undefined;
+        const key = nativeKeys?.size === 1 ? [...nativeKeys][0] : emailKey;
+        merge(key ?? `${source.id}:${account.id}`, {
+          key: `${source.id}:${account.id}`,
+          driver: account.driver,
+          displayName: account.email ? null : account.id.replace(/\.json$/i, ""),
+          email: account.email,
+          plan: account.plan,
+          accentColor: undefined,
+          environments: [],
+          sourceLabel,
+          redeem: account.usageLimits.resetCredits?.nextCreditId
+            ? {
+                environmentId,
+                input: {
+                  sourceId: source.id,
+                  accountId: account.id,
+                  creditId: account.usageLimits.resetCredits.nextCreditId,
+                },
+              }
+            : null,
+          limits: account.usageLimits,
+        });
       }
     }
   }
