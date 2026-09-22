@@ -65,6 +65,11 @@ export const ServerProviderAuth = Schema.Struct({
   email: Schema.optional(TrimmedNonEmptyString),
   subscriptionSharing: Schema.optional(Schema.Boolean),
   profileId: Schema.optional(TrimmedNonEmptyString),
+  /**
+   * The organization the login is signed in to, when the provider reports
+   * one. One email can belong to several orgs, each with its own quota.
+   */
+  organization: Schema.optional(TrimmedNonEmptyString),
 });
 export type ServerProviderAuth = typeof ServerProviderAuth.Type;
 
