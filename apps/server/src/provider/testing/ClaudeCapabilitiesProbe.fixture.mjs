@@ -42,7 +42,7 @@ lines.on("line", (line) => {
       output_style: "default",
       available_output_styles: ["default"],
       models: [],
-      account: { email: "dev@example.com", subscriptionType: "pro", tokenSource: "oauth" },
+      account: { email: "dev@example.com", organization: "Acme", subscriptionType: "pro", tokenSource: "oauth" },
     });
   }
   // The probe follows initialize with get_usage on the same process.

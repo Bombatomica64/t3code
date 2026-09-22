@@ -229,6 +229,7 @@ function nonEmptyProbeString(value: string): string | undefined {
 
 type ClaudeCapabilitiesProbe = {
   readonly email: string | undefined;
+  readonly organization: string | undefined;
   readonly subscriptionType: string | undefined;
   readonly tokenSource: string | undefined;
   /**
@@ -384,6 +385,7 @@ const probeClaudeCapabilities = (
         const account = init.account as
           | {
               readonly email?: string;
+              readonly organization?: string;
               readonly subscriptionType?: string;
               readonly tokenSource?: string;
               readonly apiProvider?: string;
@@ -391,6 +393,7 @@ const probeClaudeCapabilities = (
           | undefined;
         return {
           email: account?.email,
+          organization: nonEmptyProbeString(account?.organization ?? ""),
           subscriptionType: account?.subscriptionType,
           tokenSource: account?.tokenSource,
           apiProvider: account?.apiProvider,
@@ -621,6 +624,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
       auth: {
         status: "authenticated",
         ...(capabilities.email ? { email: capabilities.email } : {}),
+        ...(capabilities.organization ? { organization: capabilities.organization } : {}),
         ...(authMetadata ? authMetadata : {}),
       },
       ...(versionUpgradeMessage ? { message: versionUpgradeMessage } : {}),
