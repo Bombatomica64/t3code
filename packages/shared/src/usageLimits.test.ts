@@ -896,6 +896,42 @@ describe("/usage-limits", () => {
     expect(report?.accounts[0]?.limits.resetCredits?.availableCount).toBe(3);
   });
 
+  it("keeps a hub credit off both orgs when one email is signed in to two", () => {
+    const personal = provider({
+      usageLimits: limits,
+      auth: { status: "authenticated", email: "same@example.com", organization: "Personal" },
+    });
+    const work = {
+      ...personal,
+      instanceId: ProviderInstanceId.make("work"),
+      auth: { ...personal.auth, organization: "Acme" },
+    };
+    const hub = [
+      {
+        ...sources[0]!,
+        accounts: [
+          {
+            id: "duplicate",
+            driver: personal.driver,
+            email: "same@example.com",
+            usageLimits: {
+              ...limits,
+              resetCredits: { availableCount: 1, nextCreditId: "hub-credit" },
+            },
+          },
+        ],
+      },
+    ];
+    const report = collectProviderUsageLimits(personal.instanceId, [personal, work], hub, now);
+    // The hub cannot say which org it read, so redeeming its credit from
+    // either native row could spend the other org's reset.
+    expect(report?.accounts.map((account) => [account.id, account.resetCreditInput])).toEqual([
+      [personal.instanceId, { instanceId: personal.instanceId }],
+      ["work", { instanceId: "work" }],
+      ["hub:duplicate", { sourceId: "hub", accountId: "duplicate", creditId: "hub-credit" }],
+    ]);
+  });
+
   it("keeps accounts and custom instances separate, filtering by driver", () => {
     const report = collectProviderUsageLimits(
       selected.instanceId,

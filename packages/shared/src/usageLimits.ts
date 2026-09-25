@@ -570,10 +570,22 @@ export function collectProviderUsageLimits(
   const native = providersWithLimits(providers).filter(
     (provider) => provider.driver === selected.driver,
   );
+  // A hub reports no org, so it is the same account as a native login only
+  // when that email is signed in to one org; see `collectLimitAccounts`.
+  const orgsByEmail = new Map<string, Set<string | null>>();
+  for (const provider of native) {
+    const key = accountKey(provider.driver, provider.auth.email);
+    if (key)
+      orgsByEmail.set(key, (orgsByEmail.get(key) ?? new Set()).add(nativeAccountKey(provider)));
+  }
+  const soleOrg = (key: string | null): key is string =>
+    key !== null && orgsByEmail.get(key)?.size === 1;
   const nativeAccounts = new Set(
     native.flatMap((provider) => {
       const key = accountKey(provider.driver, provider.auth.email);
-      return key && provider.usageLimits?.windows.length && !provider.usageLimits.unavailable
+      return soleOrg(key) &&
+        provider.usageLimits?.windows.length &&
+        !provider.usageLimits.unavailable
         ? [key]
         : [];
     }),
@@ -587,7 +599,7 @@ export function collectProviderUsageLimits(
       .flatMap((source) => source.accounts.map((account) => ({ source, account })))
       .filter(
         ({ account }) =>
-          key !== null &&
+          soleOrg(key) &&
           accountKey(account.driver, account.email) === key &&
           account.usageLimits.resetCredits &&
           !limitsNotice(account.usageLimits),
