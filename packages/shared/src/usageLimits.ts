@@ -151,12 +151,13 @@ function accountKey(
 
 /**
  * One email can belong to several orgs, each with its own quota, so a native
- * login that names its org is keyed by it too. Hubs report no org; see
+ * login that names its org is keyed by it too: by the org's stable id, or by
+ * its display name when the provider reports no id. Hubs report no org; see
  * `collectLimitAccounts` for how they are matched.
  */
 function nativeAccountKey(provider: ServerProvider): string | null {
   const key = accountKey(provider.driver, provider.auth.email, provider.usageLimits);
-  const organization = provider.auth.organization?.trim().toLowerCase();
+  const organization = provider.auth.accountId ?? provider.auth.organization?.trim().toLowerCase();
   return key && organization ? `${key}:${organization}` : key;
 }
 
