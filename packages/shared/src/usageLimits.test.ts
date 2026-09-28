@@ -544,6 +544,34 @@ describe("pools", () => {
     ]);
   });
 
+  it("tells orgs apart by their id, not their display name", () => {
+    const first = provider({
+      driver: claude,
+      instanceId: ProviderInstanceId.make("claude"),
+      auth: {
+        status: "authenticated",
+        email: "same@example.com",
+        organization: "Acme",
+        accountId: "org-1",
+      },
+      usageLimits: { checkedAt, windows: [window] },
+    });
+    const withOrg = (instanceId: string, organization: string, accountId: string) => ({
+      ...first,
+      instanceId: ProviderInstanceId.make(instanceId),
+      auth: { ...first.auth, organization, accountId },
+    });
+    const keysFor = (providers: ServerProvider[]) =>
+      collectLimitAccounts(
+        new Map([[EnvironmentId.make("env-a"), { ...laptop, serverConfig: { providers } }]]),
+      ).map((account) => account.key);
+    expect(keysFor([first, withOrg("namesake", "Acme", "org-2")])).toEqual([
+      "env-a:claude",
+      "env-a:namesake",
+    ]);
+    expect(keysFor([first, withOrg("renamed", "Acme Inc", "org-1")])).toEqual(["env-a:claude"]);
+  });
+
   it("joins a hub account to the native org only when one org uses the email", () => {
     const native = provider({
       driver: claude,

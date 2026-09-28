@@ -229,6 +229,15 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
                   ),
               ),
             ),
+            Effect.flatMap((provider) =>
+              provider.auth.status === "authenticated"
+                ? ClaudeResetCredits.readClaudeOrganizationId(accountConfigPath).pipe(
+                    Effect.map((accountId) =>
+                      accountId ? { ...provider, auth: { ...provider.auth, accountId } } : provider,
+                    ),
+                  )
+                : Effect.succeed(provider),
+            ),
             Effect.map(stampIdentity),
           ),
         ),
