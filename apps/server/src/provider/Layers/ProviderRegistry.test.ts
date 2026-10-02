@@ -152,6 +152,7 @@ function booleanDescriptor(id: string, label: string) {
 type TestClaudeCapabilities = {
   readonly email: string | undefined;
   readonly organization: string | undefined;
+  readonly accountId?: string | undefined;
   readonly subscriptionType: string | undefined;
   readonly tokenSource: string | undefined;
   readonly apiProvider: string | undefined;
@@ -2907,11 +2908,16 @@ it.layer(Layer.mergeAll(TestNodeServices, ServerSettingsModule.layerTest(), Test
         Effect.gen(function* () {
           const status = yield* checkClaudeProviderStatus(
             defaultClaudeSettings,
-            claudeCapabilities({ email: "claude@example.com", organization: "Acme" }),
+            claudeCapabilities({
+              email: "claude@example.com",
+              organization: "Acme",
+              accountId: "org-1",
+            }),
           );
           assert.strictEqual(status.auth.status, "authenticated");
           assert.strictEqual(status.auth.email, "claude@example.com");
           assert.strictEqual(status.auth.organization, "Acme");
+          assert.strictEqual(status.auth.accountId, "org-1");
         }).pipe(
           Effect.provide(
             mockSpawnerLayer((args) => {

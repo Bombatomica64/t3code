@@ -228,6 +228,11 @@ function nonEmptyProbeString(value: string): string | undefined {
 type ClaudeCapabilitiesProbe = {
   readonly email: string | undefined;
   readonly organization: string | undefined;
+  /**
+   * The org UUID from the login's account record. The driver reads it in the
+   * same cached probe, so it always describes the same login as the rest.
+   */
+  readonly accountId?: string | undefined;
   readonly subscriptionType: string | undefined;
   readonly tokenSource: string | undefined;
   /**
@@ -596,6 +601,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
         status: "authenticated",
         ...(capabilities.email ? { email: capabilities.email } : {}),
         ...(capabilities.organization ? { organization: capabilities.organization } : {}),
+        ...(capabilities.accountId ? { accountId: capabilities.accountId } : {}),
         ...(authMetadata ? authMetadata : {}),
       },
       ...(versionUpgradeMessage ? { message: versionUpgradeMessage } : {}),
