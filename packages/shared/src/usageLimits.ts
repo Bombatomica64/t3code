@@ -138,6 +138,23 @@ function nativeAccountKey(provider: ServerProvider): string | null {
 }
 
 /**
+ * The native account keys signed in with each email. A hub reports no org, so
+ * it is the same account as a native login only when that email is signed in
+ * to one org. Every enabled login counts, whether or not its limits were read.
+ */
+function nativeKeysByEmail(providers: Iterable<ServerProvider>): Map<string, Set<string>> {
+  const keysByEmail = new Map<string, Set<string>>();
+  for (const provider of providers) {
+    if (!provider.enabled) continue;
+    const emailKey = accountKey(provider.driver, provider.auth.email, provider.usageLimits);
+    const key = nativeAccountKey(provider);
+    if (emailKey && key)
+      keysByEmail.set(emailKey, (keysByEmail.get(emailKey) ?? new Set()).add(key));
+  }
+  return keysByEmail;
+}
+
+/**
  * One subscription account as the pooled views see it, whichever way it was
  * reported. Matching emails or credentials across environments name one
  * account, and so does a hub report of a native one. Its quota is one bucket,
@@ -235,20 +252,16 @@ export function collectLimitAccounts(presentations: LimitPresentations): readonl
       },
     });
   };
-  // Native keys seen per email, so a hub account (which names no org) joins
-  // the native one only when exactly one org is signed in with that email.
-  const nativeKeysByEmail = new Map<string, Set<string>>();
+  const nativeKeys = nativeKeysByEmail(
+    [...presentations.values()].flatMap(
+      (presentation) => presentation.serverConfig?.providers ?? [],
+    ),
+  );
   for (const [environmentId, presentation] of presentations) {
     const label = presentation.entry.target.label;
     for (const provider of providersWithLimits(presentation.serverConfig?.providers ?? [])) {
-      const emailKey = accountKey(provider.driver, provider.auth.email, provider.usageLimits);
-      const key = nativeAccountKey(provider);
-      if (emailKey && key) {
-        const keys = nativeKeysByEmail.get(emailKey) ?? new Set<string>();
-        nativeKeysByEmail.set(emailKey, keys.add(key));
-      }
       if (!provider.usageLimits || limitsNotice(provider.usageLimits) !== null) continue;
-      merge(key ?? `${environmentId}:${provider.instanceId}`, {
+      merge(nativeAccountKey(provider) ?? `${environmentId}:${provider.instanceId}`, {
         key: `${environmentId}:${provider.instanceId}`,
         driver: provider.driver,
         displayName: provider.displayName?.trim() || null,
@@ -274,8 +287,8 @@ export function collectLimitAccounts(presentations: LimitPresentations): readonl
       for (const account of source.accounts) {
         if (limitsNotice(account.usageLimits) !== null) continue;
         const emailKey = accountKey(account.driver, account.email, account.usageLimits);
-        const nativeKeys = emailKey ? nativeKeysByEmail.get(emailKey) : undefined;
-        const key = nativeKeys?.size === 1 ? [...nativeKeys][0] : emailKey;
+        const keys = emailKey ? nativeKeys.get(emailKey) : undefined;
+        const key = keys?.size === 1 ? [...keys][0] : emailKey;
         merge(key ?? `${source.id}:${account.id}`, {
           key: `${source.id}:${account.id}`,
           driver: account.driver,
@@ -650,14 +663,9 @@ export function collectProviderUsageLimits(
   const native = providersWithLimits(providers).filter(
     (provider) => provider.driver === selected.driver,
   );
-  // A hub reports no org, so it is the same account as a native login only
-  // when that email is signed in to one org; see `collectLimitAccounts`.
-  const orgsByEmail = new Map<string, Set<string | null>>();
-  for (const provider of native) {
-    const key = accountKey(provider.driver, provider.auth.email, provider.usageLimits);
-    if (key)
-      orgsByEmail.set(key, (orgsByEmail.get(key) ?? new Set()).add(nativeAccountKey(provider)));
-  }
+  const orgsByEmail = nativeKeysByEmail(
+    providers.filter((provider) => provider.driver === selected.driver),
+  );
   const soleOrg = (key: string | null): key is string =>
     key !== null && orgsByEmail.get(key)?.size === 1;
   const nativeAccounts = new Set(

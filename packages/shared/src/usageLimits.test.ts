@@ -616,6 +616,15 @@ describe("pools", () => {
       "env-a:claude",
       "hub:claude-same@example.com.json",
     ]);
+    const unreadOrg = provider({
+      driver: claude,
+      instanceId: otherOrg.instanceId,
+      auth: otherOrg.auth,
+    });
+    expect(accountsFor([native, unreadOrg]).map((account) => account.key)).toEqual([
+      "env-a:claude",
+      "hub:claude-same@example.com.json",
+    ]);
   });
 
   it("keys a hub account without an email by hub, so two environments on one hub share it", () => {
@@ -1083,6 +1092,18 @@ describe("/usage-limits", () => {
     expect(report?.accounts.map((account) => [account.id, account.resetCreditInput])).toEqual([
       [personal.instanceId, { instanceId: personal.instanceId }],
       ["work", { instanceId: "work" }],
+      ["hub:duplicate", { sourceId: "hub", accountId: "duplicate", creditId: "hub-credit" }],
+    ]);
+    // An org whose limits were never read is still signed in with that email.
+    const unread = provider({ instanceId: work.instanceId, driver: work.driver, auth: work.auth });
+    const withUnread = collectProviderUsageLimits(
+      personal.instanceId,
+      [personal, unread],
+      hub,
+      now,
+    );
+    expect(withUnread?.accounts.map((account) => [account.id, account.resetCreditInput])).toEqual([
+      [personal.instanceId, { instanceId: personal.instanceId }],
       ["hub:duplicate", { sourceId: "hub", accountId: "duplicate", creditId: "hub-credit" }],
     ]);
   });
