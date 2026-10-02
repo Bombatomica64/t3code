@@ -198,7 +198,14 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         capacity: 1,
         timeToLive: CAPABILITIES_PROBE_TTL,
         lookup: () =>
-          probeClaudeCapabilities(effectiveConfig, processEnv, cwd).pipe(
+          Effect.all([
+            probeClaudeCapabilities(effectiveConfig, processEnv, cwd),
+            ClaudeResetCredits.readClaudeOrganizationId(accountConfigPath),
+          ]).pipe(
+            Effect.map(([capabilities, accountId]) =>
+              capabilities ? { ...capabilities, accountId } : capabilities,
+            ),
+            Effect.provideService(FileSystem.FileSystem, fileSystem),
             Effect.provideService(Path.Path, path),
           ),
       });
@@ -228,15 +235,6 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
                     Effect.provideService(Path.Path, path),
                   ),
               ),
-            ),
-            Effect.flatMap((provider) =>
-              provider.auth.status === "authenticated"
-                ? ClaudeResetCredits.readClaudeOrganizationId(accountConfigPath).pipe(
-                    Effect.map((accountId) =>
-                      accountId ? { ...provider, auth: { ...provider.auth, accountId } } : provider,
-                    ),
-                  )
-                : Effect.succeed(provider),
             ),
             Effect.map(stampIdentity),
           ),
