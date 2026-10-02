@@ -628,6 +628,14 @@ describe("pools", () => {
       "env-a:claude",
       "hub:claude-same@example.com.json",
     ]);
+    // A login that names no org keys on the bare email, which the hub must not take.
+    const { organization: _, ...noOrgAuth } = otherOrg.auth;
+    const noOrg = { ...otherOrg, auth: noOrgAuth };
+    expect(accountsFor([native, noOrg]).map((account) => account.key)).toEqual([
+      "env-a:claude",
+      "env-a:work",
+      "hub:claude-same@example.com.json",
+    ]);
   });
 
   it("keys a hub account without an email by hub, so two environments on one hub share it", () => {

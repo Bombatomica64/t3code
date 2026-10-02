@@ -312,7 +312,9 @@ export function collectLimitAccounts(presentations: LimitPresentations): readonl
         if (limitsNotice(account.usageLimits) !== null) continue;
         const emailKey = accountKey(account.driver, account.email, account.usageLimits);
         const keys = emailKey ? nativeKeys.get(emailKey) : undefined;
-        const key = keys?.size === 1 ? [...keys][0] : emailKey;
+        // Several orgs on this email: the hub can't say which it read, so it
+        // keeps its own row rather than a native login's key.
+        const key = keys?.size === 1 ? [...keys][0] : keys?.size ? null : emailKey;
         merge(key ?? `${source.id}:${account.id}`, {
           key: `${source.id}:${account.id}`,
           driver: account.driver,
