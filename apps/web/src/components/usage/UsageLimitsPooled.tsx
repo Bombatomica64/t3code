@@ -528,7 +528,11 @@ function PoolBar({
         ) : (
           // The account reports nothing in this window, but keeps its place:
           // a row holds the same account across every card of this provider.
-          <div key={member.account.key} aria-hidden className="h-5 min-w-0 @2xl/pool:h-8" />
+          <div key={member.account.key} aria-hidden className="flex min-w-0 flex-col">
+            <div className="h-5 @2xl/pool:h-8" />
+            {/* The narrow-width legend row a populated segment carries below its bar. */}
+            <div className="h-7 @2xl/pool:hidden" />
+          </div>
         ),
       )}
     </div>
