@@ -607,6 +607,15 @@ describe("pools", () => {
       auth: { ...native.auth, organization: "Personal" },
     };
     expect(accountsFor([native, otherOrg])).toHaveLength(3);
+    // A failed read still signs in a second org, so the hub stays ambiguous.
+    const failedOrg = {
+      ...otherOrg,
+      usageLimits: { checkedAt, windows: [], unavailable: { reason: "probeFailed" as const } },
+    };
+    expect(accountsFor([native, failedOrg]).map((account) => account.key)).toEqual([
+      "env-a:claude",
+      "hub:claude-same@example.com.json",
+    ]);
   });
 
   it("keys a hub account without an email by hub, so two environments on one hub share it", () => {

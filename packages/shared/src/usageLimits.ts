@@ -241,13 +241,13 @@ export function collectLimitAccounts(presentations: LimitPresentations): readonl
   for (const [environmentId, presentation] of presentations) {
     const label = presentation.entry.target.label;
     for (const provider of providersWithLimits(presentation.serverConfig?.providers ?? [])) {
-      if (!provider.usageLimits || limitsNotice(provider.usageLimits) !== null) continue;
       const emailKey = accountKey(provider.driver, provider.auth.email, provider.usageLimits);
       const key = nativeAccountKey(provider);
       if (emailKey && key) {
         const keys = nativeKeysByEmail.get(emailKey) ?? new Set<string>();
         nativeKeysByEmail.set(emailKey, keys.add(key));
       }
+      if (!provider.usageLimits || limitsNotice(provider.usageLimits) !== null) continue;
       merge(key ?? `${environmentId}:${provider.instanceId}`, {
         key: `${environmentId}:${provider.instanceId}`,
         driver: provider.driver,
