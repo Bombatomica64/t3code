@@ -4,14 +4,17 @@ import { useNavigate } from "@tanstack/react-router";
 import { useCallback, type MouseEvent } from "react";
 
 import { useRightPanelStore } from "../rightPanelStore";
-import { useProjects, useServerConfigs } from "../state/entities";
+import { readThreadShell, useProjects, useServerConfigs } from "../state/entities";
 import { shouldOpenPullRequestExternally } from "./openPullRequestLink";
 
 /** An issue a link names, before it is matched to a project. */
 export interface IssueLink {
   readonly tracker: IssueTrackerKind;
-  /** The repository the issue lives in, as `host/owner/name`, lowercased. */
-  readonly repositoryKey: string;
+  /**
+   * The repository the issue lives in, as `host/owner/name`, lowercased. Null for a tracker whose
+   * links name no repository, which a thread then reads through its own project.
+   */
+  readonly repositoryKey: string | null;
   /** The tracker's own key for the issue, as its listing would give it. */
   readonly issueId: string;
   readonly reference: string;
@@ -42,11 +45,38 @@ export function parseGitHubIssueUrl(url: string): IssueLink | null {
   };
 }
 
+/**
+ * A Linear issue URL, `https://linear.app/<workspace>/issue/<TEAM-123>/<slug>`. The identifier is
+ * what the Linear provider reads an issue by; the workspace and slug are only decoration.
+ */
+export function parseLinearIssueUrl(url: string): IssueLink | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "https:" || parsed.host.toLowerCase() !== "linear.app") return null;
+  const match =
+    /^\/[^/]+\/issue\/([A-Za-z][A-Za-z0-9_]{0,15}-[1-9][0-9]{0,9})(?:\/[^/]*)?\/?$/u.exec(
+      parsed.pathname,
+    );
+  if (match === null) return null;
+  const identifier = match[1]!.toUpperCase();
+  return { tracker: "linear", repositoryKey: null, issueId: identifier, reference: identifier };
+}
+
+/** The issue any supported tracker's link names. */
+export function parseIssueUrl(url: string): IssueLink | null {
+  return parseGitHubIssueUrl(url) ?? parseLinearIssueUrl(url);
+}
+
 /** The workspace project whose repository the issue lives in, if there is one. */
 export function findProjectForIssue(
   projects: ReadonlyArray<EnvironmentProject>,
   link: IssueLink,
 ): EnvironmentProject | undefined {
+  if (link.repositoryKey === null) return undefined;
   return projects.find(
     (project) => project.repositoryIdentity?.canonicalKey.toLowerCase() === link.repositoryKey,
   );
@@ -71,17 +101,24 @@ export function useOpenIssueLink(threadRef?: ScopedThreadRef) {
       environmentId?: EnvironmentId,
     ): boolean => {
       if (shouldOpenPullRequestExternally(event)) return false;
-      const link = parseGitHubIssueUrl(url);
+      const link = parseIssueUrl(url);
       if (link === null) return false;
       const scope = threadRef?.environmentId ?? environmentId;
-      const project = findProjectForIssue(
-        allProjects.filter(
-          (candidate) =>
-            (scope === undefined || candidate.environmentId === scope) &&
-            serverConfigs.get(candidate.environmentId)?.environment.capabilities.issues === true,
-        ),
-        link,
+      const candidates = allProjects.filter(
+        (candidate) =>
+          (scope === undefined || candidate.environmentId === scope) &&
+          serverConfigs.get(candidate.environmentId)?.environment.capabilities.issues === true,
       );
+      // A link that names no repository is read through the thread's own project, whose tracker
+      // settings say where its issues live; with no thread there is no project to read it through.
+      const threadProjectId =
+        link.repositoryKey === null && threadRef
+          ? readThreadShell(threadRef)?.projectId
+          : undefined;
+      const project =
+        link.repositoryKey === null
+          ? candidates.find((candidate) => candidate.id === threadProjectId)
+          : findProjectForIssue(candidates, link);
       if (project === undefined) return false;
       event.preventDefault();
       event.stopPropagation();

@@ -986,6 +986,7 @@ export const PROJECT_SCOPED_SERVER_SETTING_KEYS = [
   "sidebarAutoSettleAfterDays",
   "continueThreadsAfterServerUpdate",
   "responseStreamingMode",
+  "linearTeamId",
 ] as const;
 export type ProjectScopedServerSettingKey = (typeof PROJECT_SCOPED_SERVER_SETTING_KEYS)[number];
 
@@ -1036,6 +1037,7 @@ export const ProjectSettingsOverrides = Schema.Struct({
   providerInstances: Schema.optionalKey(
     Schema.Record(ProviderInstanceId, ProjectProviderInstanceOverride),
   ),
+  linearTeamId: Schema.optionalKey(TrimmedString),
 } satisfies Record<ProjectScopedServerSettingKey | "providerInstances", unknown>);
 export type ProjectSettingsOverrides = typeof ProjectSettingsOverrides.Type;
 
@@ -1327,6 +1329,13 @@ export const ServerSettings = Schema.Struct({
   usageLimitSources: Schema.Record(UsageLimitSourceId, UsageLimitSourceConfig).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
+  /**
+   * A Linear personal API key, for the Issues page. Kept in the secret store and redacted before
+   * reaching a client, like a hub management key.
+   */
+  linearApiKey: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  /** The Linear team whose issues a project shows. Empty shows a team picker instead. */
+  linearTeamId: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   /** Allows this server to read the Cursor CLI's macOS Keychain login for account usage. */
   cursorKeychainUsageEnabled: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
@@ -1632,6 +1641,9 @@ export const ServerSettingsPatch = Schema.Struct({
   usageLimitSources: Schema.optionalKey(
     Schema.Record(UsageLimitSourceId, Schema.NullOr(UsageLimitSourceConfig)),
   ),
+  /** The redaction marker keeps the saved key; an empty string removes it. */
+  linearApiKey: Schema.optionalKey(TrimmedString),
+  linearTeamId: Schema.optionalKey(TrimmedString),
   cursorKeychainUsageEnabled: Schema.optionalKey(Schema.Boolean),
   /** Each entry replaces one model's rates; `null` restores automatic pricing. */
   usagePriceOverrides: Schema.optionalKey(

@@ -14,6 +14,7 @@ import type {
   IssueErrorReason,
   IssueListEntry,
   IssueListState,
+  IssueSourceOption,
   IssueTrackerKind,
   ProjectId,
   RepositoryIdentity,
@@ -63,6 +64,13 @@ export interface IssueProviderApi {
     project: IssueProject,
     query: ProviderIssueQuery,
   ) => Effect.Effect<ProviderIssuePage, IssueProviderError>;
+  /**
+   * The places this project's issues could live, for a tracker that has to be told which one,
+   * such as a Linear team. Absent for a tracker that works it out from the project itself.
+   */
+  readonly sourceOptions?: (
+    project: IssueProject,
+  ) => Effect.Effect<ReadonlyArray<IssueSourceOption>, IssueProviderError>;
   /** `id` is an entry's own `id`, as a listing handed it over. */
   readonly getIssue: (
     project: IssueProject,

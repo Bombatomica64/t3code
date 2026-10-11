@@ -2,15 +2,25 @@ import type { IssueStateReason, IssueTrackerKind } from "@t3tools/contracts";
 import { CircleCheckIcon, CircleDotIcon, CircleSlashIcon } from "lucide-react";
 import type { ElementType } from "react";
 
-import { GitHubIcon } from "../Icons";
+import { GitHubIcon, LinearIcon } from "../Icons";
 
 export interface IssueTrackerPresentation {
   readonly label: string;
   readonly Icon: ElementType<{ className?: string }>;
+  /**
+   * For a tracker the page has to tell where a project's issues live: the project setting that
+   * holds the choice, and what one choice is called.
+   */
+  readonly source?: { readonly settingKey: "linearTeamId"; readonly noun: string };
 }
 
 export const ISSUE_TRACKERS: Record<IssueTrackerKind, IssueTrackerPresentation> = {
   github: { label: "GitHub", Icon: GitHubIcon },
+  linear: {
+    label: "Linear",
+    Icon: LinearIcon,
+    source: { settingKey: "linearTeamId", noun: "team" },
+  },
 };
 
 /** An issue's state as one glyph, in the tones pull requests use for open and merged. */

@@ -1,11 +1,20 @@
 import { assert, describe, it } from "@effect/vitest";
-import type { IssueListEntry, OrchestrationProjectShell, ProjectId } from "@t3tools/contracts";
+import type {
+  IssueListEntry,
+  OrchestrationProjectShell,
+  ProjectId,
+  ServerSettings,
+} from "@t3tools/contracts";
+import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts/settings";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Stream from "effect/Stream";
 
 import * as ProjectService from "../project/ProjectService.ts";
 import * as RepositoryIdentityResolver from "../project/RepositoryIdentityResolver.ts";
+import * as ServerSettingsService from "../serverSettings.ts";
 import { IssueProviderError, type IssueProviderApi } from "./IssueProvider.ts";
 import * as IssueProviderRegistry from "./IssueProviderRegistry.ts";
 import * as IssueService from "./IssueService.ts";
@@ -34,7 +43,10 @@ const entry: IssueListEntry = {
   updatedAt: "2026-10-01T00:00:00Z",
 };
 
-function makeService(provider: IssueProviderApi) {
+function makeService(
+  provider: IssueProviderApi,
+  settingsChanges: Stream.Stream<ServerSettings> = Stream.empty,
+) {
   return IssueService.make.pipe(
     Effect.provide(
       Layer.mergeAll(
@@ -49,6 +61,7 @@ function makeService(provider: IssueProviderApi) {
         Layer.mock(RepositoryIdentityResolver.RepositoryIdentityResolver)({
           resolve: () => Effect.succeed(null),
         }),
+        Layer.mock(ServerSettingsService.ServerSettingsService)({ streamChanges: settingsChanges }),
       ),
     ),
   );
@@ -111,6 +124,40 @@ describe("IssueService", () => {
       assert.strictEqual(reads, 1);
       assert.deepStrictEqual(again, { entries: [entry], nextCursor: null });
       yield* service.list({ ...input, cursor: "next" });
+      assert.strictEqual(reads, 2);
+    }),
+  );
+
+  it.effect("drops cached reads when settings change, such as a project's team", () =>
+    Effect.gen(function* () {
+      const changed = yield* Deferred.make<void>();
+      const handled = yield* Deferred.make<void>();
+      // Emits one change, then marks it handled when the service asks for the next one.
+      const changes = Stream.fromEffect(
+        Deferred.await(changed).pipe(Effect.as(DEFAULT_SERVER_SETTINGS)),
+      ).pipe(
+        Stream.concat(
+          Stream.fromEffect(Deferred.succeed(handled, undefined)).pipe(
+            Stream.flatMap(() => Stream.never),
+          ),
+        ),
+      );
+      let reads = 0;
+      const service = yield* makeService(
+        fakeProvider({
+          listIssues: () =>
+            Effect.sync(() => {
+              reads++;
+              return { items: [entry], nextCursor: null };
+            }),
+        }),
+        changes,
+      );
+      const input = { projectId: project.id, tracker: "github", state: "open" } as const;
+      yield* service.list(input);
+      yield* Deferred.succeed(changed, undefined);
+      yield* Deferred.await(handled);
+      yield* service.list(input);
       assert.strictEqual(reads, 2);
     }),
   );

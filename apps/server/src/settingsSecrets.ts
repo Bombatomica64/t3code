@@ -146,5 +146,12 @@ export function mapSettingsSecrets(
     ]),
   ) as ServerSettings["usageLimitSources"];
 
-  return { ...settings, providerInstances, sourceControlHosts, usageLimitSources };
+  // One Linear API key per environment.
+  const { linearApiKey } = mapFields(
+    { linearApiKey: settings.linearApiKey },
+    ["linearApiKey"],
+    () => "linear-api-key",
+  ) as { readonly linearApiKey: string };
+
+  return { ...settings, providerInstances, sourceControlHosts, usageLimitSources, linearApiKey };
 }

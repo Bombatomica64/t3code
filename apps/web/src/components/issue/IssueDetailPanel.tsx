@@ -77,6 +77,18 @@ export function IssueDetailPanel({
   const issue = query.data;
   const tracker = ISSUE_TRACKERS[reference.tracker];
   const openLabel = `Open in ${tracker.label}`;
+  // How many comments the tracker holds past those shown: 0 where it says there are more but not
+  // how many, null where there are none.
+  const moreComments =
+    issue === null
+      ? null
+      : issue.commentCount !== null
+        ? issue.commentCount > issue.comments.length
+          ? issue.commentCount - issue.comments.length
+          : null
+        : issue.moreComments === true
+          ? 0
+          : null;
 
   return (
     <section aria-label="Issue" className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
@@ -182,7 +194,11 @@ export function IssueDetailPanel({
 
             <section aria-label="Comments" className="flex flex-col gap-3">
               <h3 className="text-xs font-medium text-muted-foreground">
-                {issue.commentCount === 1 ? "1 comment" : `${issue.commentCount} comments`}
+                {issue.commentCount === null
+                  ? "Comments"
+                  : issue.commentCount === 1
+                    ? "1 comment"
+                    : `${issue.commentCount} comments`}
               </h3>
               {issue.comments.length > 0 ? (
                 <ul className="flex flex-col gap-3">
@@ -196,14 +212,14 @@ export function IssueDetailPanel({
                   ))}
                 </ul>
               ) : null}
-              {issue.commentCount > issue.comments.length ? (
+              {moreComments !== null ? (
                 <a
                   className="text-xs text-muted-foreground underline-offset-2 hover:underline"
                   href={issue.url}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  {issue.commentCount - issue.comments.length} more on {tracker.label}
+                  {moreComments === 0 ? "More" : `${moreComments} more`} on {tracker.label}
                 </a>
               ) : null}
             </section>

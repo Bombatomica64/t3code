@@ -19,6 +19,12 @@ export function createIssueEnvironmentAtoms<R, E>(
       tag: WS_METHODS.issuesSources,
       staleTimeMs: 5 * 60_000,
     }),
+    /** Where a project's issues could live on a tracker, read fresh each time a picker opens. */
+    sourceOptions: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:issues:source-options",
+      tag: WS_METHODS.issuesSourceOptions,
+      staleTimeMs: 0,
+    }),
     list: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:issues:list",
       tag: WS_METHODS.issuesList,

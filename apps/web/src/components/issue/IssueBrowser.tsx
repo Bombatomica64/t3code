@@ -26,6 +26,7 @@ import {
   IssueSearchInput,
   type IssueFilterOption,
 } from "./IssueList";
+import { IssueSourceMenu, IssueSourcePicker } from "./IssueSourcePicker";
 import { ISSUE_TRACKERS } from "./issueTrackers";
 
 /** What narrows a listing. The page keeps these in its URL, a thread's panel in its own state. */
@@ -77,7 +78,8 @@ function IssueSourceUnavailable({ source }: { source: IssueSource | null }) {
       <EmptyHeader>
         <EmptyTitle>{title}</EmptyTitle>
         <EmptyDescription>
-          {source?.detail ?? "Issues can be browsed for projects whose repository is on GitHub."}
+          {source?.detail ??
+            "Issues can be browsed for projects on GitHub, or from a Linear team once a Linear API key is saved in Settings → Integrations."}
         </EmptyDescription>
       </EmptyHeader>
     </Empty>
@@ -146,6 +148,11 @@ export function IssueBrowser({
 
   const filtered =
     filters.state !== "open" || filters.assignee !== "anyone" || filters.label !== undefined;
+  // A new source changes what every listing means, so the pages already held start over.
+  const refreshAfterSourceChange = () => {
+    sourcesQuery.refresh();
+    issues.refresh();
+  };
 
   let body: ReactNode;
   if (sourcesQuery.error !== null && sourcesQuery.data === null) {
@@ -163,6 +170,21 @@ export function IssueBrowser({
     );
   } else if (sourcesQuery.data === null || (source?.available && issues.isLoading)) {
     body = <PullRequestListGhost />;
+  } else if (
+    source !== undefined &&
+    !source.available &&
+    ISSUE_TRACKERS[source.tracker].source !== undefined &&
+    (source.reason === "not-configured" || source.reason === "not-found")
+  ) {
+    body = (
+      <IssueSourcePicker
+        environmentId={environmentId}
+        projectId={projectId}
+        tracker={source.tracker}
+        detail={source.detail}
+        onChanged={refreshAfterSourceChange}
+      />
+    );
   } else if (!source?.available) {
     body = <IssueSourceUnavailable source={source ?? null} />;
   } else if (issues.error !== null && issues.entries.length === 0) {
@@ -267,6 +289,15 @@ export function IssueBrowser({
       {renderHeader(controls)}
       {source?.available ? (
         <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-border px-3 py-2">
+          {ISSUE_TRACKERS[source.tracker].source !== undefined ? (
+            <IssueSourceMenu
+              environmentId={environmentId}
+              projectId={projectId}
+              tracker={source.tracker}
+              name={source.name}
+              onChanged={refreshAfterSourceChange}
+            />
+          ) : null}
           <IssueSearchInput
             value={filters.q}
             busy={filters.q.length > 0 && (filters.q !== query || issues.isRefreshing)}

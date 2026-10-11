@@ -8,7 +8,7 @@ import { PullRequestActor, PullRequestLabel } from "./pullRequest.ts";
  * repository decides where its pull requests live, while its issues may live in a tracker of
  * their own.
  */
-export const IssueTrackerKind = Schema.Literals(["github"]);
+export const IssueTrackerKind = Schema.Literals(["github", "linear"]);
 export type IssueTrackerKind = typeof IssueTrackerKind.Type;
 
 /** Where an issue stands, folded to the two states every tracker has. */
@@ -30,7 +30,7 @@ export type IssueStateReason = typeof IssueStateReason.Type;
 export const IssueListEntry = Schema.Struct({
   /** The tracker's own key for reading the issue again. Opaque to the client. */
   id: TrimmedNonEmptyString,
-  /** How the tracker writes the issue's name: `#123` on GitHub. */
+  /** How the tracker writes the issue's name: `#123` on GitHub, `ENG-123` on Linear. */
   reference: TrimmedNonEmptyString,
   title: Schema.String,
   url: TrimmedNonEmptyString,
@@ -40,7 +40,8 @@ export const IssueListEntry = Schema.Struct({
   author: Schema.NullOr(PullRequestActor),
   labels: Schema.Array(PullRequestLabel),
   assignees: Schema.Array(PullRequestActor),
-  commentCount: NonNegativeInt,
+  /** Null where the tracker does not count an issue's comments, which Linear does not. */
+  commentCount: Schema.NullOr(NonNegativeInt),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });
@@ -103,6 +104,8 @@ export const IssueDetail = Schema.Struct({
    * many more the tracker holds.
    */
   comments: Schema.Array(IssueComment),
+  /** The tracker holds comments past `comments`, where it gives no `commentCount` to say so. */
+  moreComments: Schema.optional(Schema.Boolean),
 });
 export type IssueDetail = typeof IssueDetail.Type;
 
@@ -126,7 +129,7 @@ export type IssueErrorReason = typeof IssueErrorReason.Type;
 export const IssueSource = Schema.Struct({
   tracker: IssueTrackerKind,
   available: Schema.Boolean,
-  /** Where the issues are read from, as the page names it: `owner/repo` on GitHub. */
+  /** Where the issues are read from, as the page names it: `owner/repo` on GitHub, a team on Linear. */
   name: Schema.NullOr(TrimmedNonEmptyString),
   reason: Schema.NullOr(IssueErrorReason),
   detail: Schema.NullOr(TrimmedNonEmptyString),
@@ -138,6 +141,16 @@ export type IssueSourcesInput = typeof IssueSourcesInput.Type;
 
 export const IssueSourcesResult = Schema.Struct({ sources: Schema.Array(IssueSource) });
 export type IssueSourcesResult = typeof IssueSourcesResult.Type;
+
+/** One place a project's issues could live on a tracker, such as a Linear team. */
+export const IssueSourceOption = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  name: TrimmedNonEmptyString,
+});
+export type IssueSourceOption = typeof IssueSourceOption.Type;
+
+export const IssueSourceOptionsResult = Schema.Struct({ options: Schema.Array(IssueSourceOption) });
+export type IssueSourceOptionsResult = typeof IssueSourceOptionsResult.Type;
 
 /**
  * Every way an issue read fails. The first four mean the project's issues cannot be read on this

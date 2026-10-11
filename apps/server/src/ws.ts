@@ -2477,6 +2477,7 @@ const layerWsRpc = (
               ),
           ),
         [WS_METHODS.issuesSources]: (input) => issues.sources(input),
+        [WS_METHODS.issuesSourceOptions]: (input) => issues.sourceOptions(input),
         [WS_METHODS.issuesList]: (input) => issues.list(input),
         [WS_METHODS.issuesDetail]: (input) => issues.detail(input),
         [WS_METHODS.pullRequestsList]: (input) => pullRequests.list(input),

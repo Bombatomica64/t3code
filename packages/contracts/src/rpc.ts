@@ -168,6 +168,8 @@ import {
   IssueListInput,
   IssueListResult,
   IssueRef,
+  IssueSourceInput,
+  IssueSourceOptionsResult,
   IssueSourcesInput,
   IssueSourcesResult,
 } from "./issue.ts";
@@ -538,6 +540,7 @@ export const WS_METHODS = {
 
   // Issue methods
   issuesSources: "issues.sources",
+  issuesSourceOptions: "issues.sourceOptions",
   issuesList: "issues.list",
   issuesDetail: "issues.detail",
 
@@ -975,6 +978,13 @@ const IssueRpcError = Schema.Union([IssueError, EnvironmentAuthorizationError]);
 const WsIssuesSourcesRpc = Rpc.make(WS_METHODS.issuesSources, {
   payload: IssueSourcesInput,
   success: IssueSourcesResult,
+  error: IssueRpcError,
+});
+
+/** Where a tracker could read a project's issues from, for a tracker that has to be told. */
+const WsIssuesSourceOptionsRpc = Rpc.make(WS_METHODS.issuesSourceOptions, {
+  payload: IssueSourceInput,
+  success: IssueSourceOptionsResult,
   error: IssueRpcError,
 });
 
@@ -1976,6 +1986,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,
   WsIssuesSourcesRpc,
+  WsIssuesSourceOptionsRpc,
   WsIssuesListRpc,
   WsIssuesDetailRpc,
   WsPullRequestsListRpc,

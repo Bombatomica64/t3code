@@ -6,6 +6,7 @@ import {
   type IssueRef,
   type IssueSource,
   type IssueSourceInput,
+  type IssueSourceOptionsResult,
   type IssueSourcesInput,
   type IssueSourcesResult,
   type ProjectId,
@@ -17,9 +18,11 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Stream from "effect/Stream";
 
 import * as ProjectService from "../project/ProjectService.ts";
 import * as RepositoryIdentityResolver from "../project/RepositoryIdentityResolver.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import type { IssueProject, IssueProviderApi, IssueProviderError } from "./IssueProvider.ts";
 import * as IssueProviderRegistry from "./IssueProviderRegistry.ts";
 
@@ -37,6 +40,9 @@ export class IssueService extends Context.Service<
   IssueService,
   {
     readonly sources: (input: IssueSourcesInput) => Effect.Effect<IssueSourcesResult, IssueError>;
+    readonly sourceOptions: (
+      input: IssueSourceInput,
+    ) => Effect.Effect<IssueSourceOptionsResult, IssueError>;
     readonly list: (input: IssueListInput) => Effect.Effect<IssueListResult, IssueError>;
     readonly detail: (input: IssueRef) => Effect.Effect<IssueDetail, IssueError>;
   }
@@ -54,6 +60,7 @@ export const make = Effect.gen(function* () {
   const registry = yield* IssueProviderRegistry.IssueProviderRegistry;
   const projects = yield* ProjectService.ProjectService;
   const repositoryIdentities = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
+  const serverSettings = yield* ServerSettings.ServerSettingsService;
 
   const resolveProject = Effect.fn("IssueService.resolveProject")(function* (projectId: ProjectId) {
     const shell = yield* projects
@@ -125,6 +132,12 @@ export const make = Effect.gen(function* () {
     { capacity: CACHE_CAPACITY, timeToLive },
   );
 
+  // Trackers read their configuration from settings (a token, a project's team), so a change there
+  // can move where a project's issues live. Settings change rarely; every cached read goes.
+  yield* Stream.runForEach(serverSettings.streamChanges, () =>
+    Effect.andThen(Cache.invalidateAll(listCache), Cache.invalidateAll(detailCache)),
+  ).pipe(Effect.forkScoped);
+
   /** Every tracker, each saying whether it can serve this project and, if not, why. */
   const sources = Effect.fn("IssueService.sources")(function* (input: IssueSourcesInput) {
     const project = yield* resolveProject(input.projectId);
@@ -154,8 +167,19 @@ export const make = Effect.gen(function* () {
     return { sources } satisfies IssueSourcesResult;
   });
 
+  /** Not cached: it is read when a picker opens, and a new team should show at once. */
+  const sourceOptions = Effect.fn("IssueService.sourceOptions")(function* (
+    input: IssueSourceInput,
+  ) {
+    const { provider, project } = yield* resolve(input);
+    if (provider.sourceOptions === undefined) return { options: [] };
+    const options = yield* provider.sourceOptions(project).pipe(Effect.mapError(toIssueError));
+    return { options } satisfies IssueSourceOptionsResult;
+  });
+
   return IssueService.of({
     sources,
+    sourceOptions,
     // Keys list every field in a fixed order, so the same read is one key however it was built.
     list: (input) =>
       Cache.get(

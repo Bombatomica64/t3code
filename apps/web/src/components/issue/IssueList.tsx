@@ -79,7 +79,7 @@ export function IssueListRow({
         number={<span className={PULL_REQUEST_ROW_NUMBER_CLASS}>{issue.reference}</span>}
         title={issue.title}
         status={
-          issue.commentCount > 0 ? (
+          issue.commentCount !== null && issue.commentCount > 0 ? (
             <span className="inline-flex items-center gap-0.5 tabular-nums text-muted-foreground">
               <MessageSquareIcon aria-hidden className="size-3" />
               {issue.commentCount}

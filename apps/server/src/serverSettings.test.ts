@@ -1655,6 +1655,37 @@ it.layer(NodeServices.layer)("server settings", (it) => {
   );
 
   it.effect(
+    "keeps the Linear API key in the secret store and tells clients only that one is set",
+    () =>
+      Effect.gen(function* () {
+        const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+        const secrets = yield* ServerSecretStore.ServerSecretStore;
+        const serverConfig = yield* ServerConfig.ServerConfig;
+        const fileSystem = yield* FileSystem.FileSystem;
+
+        const saved = yield* serverSettings.updateSettings({ linearApiKey: "fixture-linear-key" });
+        assert.equal(saved.linearApiKey, "fixture-linear-key");
+        assert.notInclude(
+          yield* fileSystem.readFileString(serverConfig.settingsPath),
+          "fixture-linear-key",
+        );
+        assert.isTrue(Option.isSome(yield* secrets.get("linear-api-key")));
+
+        const forClient = ServerSettingsModule.redactServerSettingsForClient(saved).linearApiKey;
+        assert.notInclude(forClient, "fixture-linear-key");
+        assert.isAbove(forClient.length, 0);
+
+        // Echoing the marker back keeps the key; an empty value removes it.
+        yield* serverSettings.updateSettings({ linearApiKey: forClient, linearTeamId: "team-1" });
+        assert.equal((yield* serverSettings.getSettings).linearApiKey, "fixture-linear-key");
+        const cleared = yield* serverSettings.updateSettings({ linearApiKey: "" });
+        assert.equal(cleared.linearApiKey, "");
+        assert.equal(cleared.linearTeamId, "team-1");
+        assert.isTrue(Option.isNone(yield* secrets.get("linear-api-key")));
+      }).pipe(Effect.provide(layerServerSettingsWithSecrets())),
+  );
+
+  it.effect(
     "keeps source control host secrets in the secret store and tells clients only that one is set",
     () =>
       Effect.gen(function* () {

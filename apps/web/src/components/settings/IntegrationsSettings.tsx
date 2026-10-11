@@ -118,6 +118,7 @@ import {
 } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
+import { LinearIntegrationSettings } from "./LinearSettings";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { BrowserImportWizard, type WizardTarget } from "./BrowserImportWizard";
 import type { ImportOutcome } from "./browserImportWizard.logic";
@@ -1547,6 +1548,7 @@ export function IntegrationsSettingsPanel() {
         )}
       </SettingsSection>
       <DeviceIntegrationSettings />
+      <LinearIntegrationSettings />
     </SettingsPageContainer>
   );
 }

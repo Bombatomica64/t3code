@@ -6,6 +6,7 @@ import type { IssueTrackerKind } from "@t3tools/contracts";
 import * as BuiltInDrivers from "../sourceControl/builtInDrivers.ts";
 import * as GitHubIssueProvider from "./GitHubIssueProvider.ts";
 import type { IssueProviderApi } from "./IssueProvider.ts";
+import * as LinearIssueProvider from "./LinearIssueProvider.ts";
 
 export class IssueProviderRegistry extends Context.Service<
   IssueProviderRegistry,
@@ -26,7 +27,7 @@ export function fromProviders(
 
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
-  return fromProviders([yield* GitHubIssueProvider.make]);
+  return fromProviders([yield* GitHubIssueProvider.make, yield* LinearIssueProvider.make]);
 });
 
 export const layer = Layer.effect(IssueProviderRegistry, make).pipe(
