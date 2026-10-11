@@ -163,6 +163,15 @@ import {
 import { ProviderInstanceId, ProviderInstanceMutation } from "./providerInstance.ts";
 import { PullRequestReviewGuideResult } from "./pullRequestReviewGuide.ts";
 import {
+  IssueDetail,
+  IssueError,
+  IssueListInput,
+  IssueListResult,
+  IssueRef,
+  IssueSourcesInput,
+  IssueSourcesResult,
+} from "./issue.ts";
+import {
   PullRequestActionInput,
   PullRequestActivity,
   PullRequestCommentInput,
@@ -526,6 +535,11 @@ export const WS_METHODS = {
   // Cloud environment methods
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
   cloudInstallRelayClient: "cloud.installRelayClient",
+
+  // Issue methods
+  issuesSources: "issues.sources",
+  issuesList: "issues.list",
+  issuesDetail: "issues.detail",
 
   // Pull request methods
   pullRequestsList: "pullRequests.list",
@@ -955,6 +969,26 @@ const PullRequestRpcError = Schema.Union([
   PullRequestOperationError,
   EnvironmentAuthorizationError,
 ]);
+
+const IssueRpcError = Schema.Union([IssueError, EnvironmentAuthorizationError]);
+
+const WsIssuesSourcesRpc = Rpc.make(WS_METHODS.issuesSources, {
+  payload: IssueSourcesInput,
+  success: IssueSourcesResult,
+  error: IssueRpcError,
+});
+
+const WsIssuesListRpc = Rpc.make(WS_METHODS.issuesList, {
+  payload: IssueListInput,
+  success: IssueListResult,
+  error: IssueRpcError,
+});
+
+const WsIssuesDetailRpc = Rpc.make(WS_METHODS.issuesDetail, {
+  payload: IssueRef,
+  success: IssueDetail,
+  error: IssueRpcError,
+});
 
 const WsPullRequestsListRpc = Rpc.make(WS_METHODS.pullRequestsList, {
   payload: PullRequestListInput,
@@ -1941,6 +1975,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetBackgroundPolicyRpc,
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,
+  WsIssuesSourcesRpc,
+  WsIssuesListRpc,
+  WsIssuesDetailRpc,
   WsPullRequestsListRpc,
   WsPullRequestsListStatsRpc,
   WsPullRequestsSummaryRpc,

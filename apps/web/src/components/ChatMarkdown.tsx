@@ -200,6 +200,7 @@ import {
   resolvePullRequestPreviewTarget,
   useOpenChangeRequestLink,
 } from "~/lib/openPullRequestLink";
+import { useOpenIssueLink } from "~/lib/openIssueLink";
 import { useOpenLink } from "../browser/useOpenLink";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import { isPreviewAvailableFor } from "../browser/previewRuntime";
@@ -2494,6 +2495,7 @@ function useChatMarkdownState({
   }, []);
   const openChangeRequestLink = useOpenChangeRequestLink(threadRef, pullRequestPanelRef);
   const openDeferredMarkdownLink = useOpenLink(threadRef);
+  const openIssueLink = useOpenIssueLink(threadRef);
   // Subscribed rather than read at click time: the anchor has to decide
   // synchronously whether to intercept its `_blank`, and a subscription is what
   // makes a persisted "app" apply once settings hydrate after launch.
@@ -2738,6 +2740,7 @@ function useChatMarkdownState({
       onUseArtifactTemplate,
       onRunShellCommand,
       openChangeRequestLink,
+      openIssueLink,
       openDeferredMarkdownLink,
       openExternalLinkInPreview,
       openMarkdownMedia,
@@ -2771,6 +2774,7 @@ function useChatMarkdownState({
       onUseArtifactTemplate,
       onRunShellCommand,
       openChangeRequestLink,
+      openIssueLink,
       openDeferredMarkdownLink,
       openExternalLinkInPreview,
       openMarkdownMedia,
@@ -2920,6 +2924,7 @@ const CHAT_MARKDOWN_COMPONENTS = {
       threadRef,
       openMarkdownMedia,
       openChangeRequestLink,
+      openIssueLink,
       openDeferredMarkdownLink,
       linkTargetPreference,
       openExternalLinkInPreview,
@@ -3028,7 +3033,8 @@ const CHAT_MARKDOWN_COMPONENTS = {
             // the panel it opens offers the browser as one of its actions.
             if (
               !href ||
-              openChangeRequestLink(event, href, undefined, environmentId ?? undefined)
+              openChangeRequestLink(event, href, undefined, environmentId ?? undefined) ||
+              openIssueLink(event, href, environmentId ?? undefined)
             ) {
               return;
             }
@@ -3159,7 +3165,24 @@ const CHAT_MARKDOWN_COMPONENTS = {
                 environmentId ?? undefined,
               )
             }
-            onOpenFallback={openDeferredMarkdownLink}
+            // A `#123` that is no pull request is the issue with that number.
+            onOpenFallback={async (url) => {
+              if (
+                openIssueLink(
+                  {
+                    metaKey: false,
+                    ctrlKey: false,
+                    preventDefault: () => undefined,
+                    stopPropagation: () => undefined,
+                  },
+                  url,
+                  environmentId ?? undefined,
+                )
+              ) {
+                return;
+              }
+              await openDeferredMarkdownLink(url);
+            }}
           />
         );
       }

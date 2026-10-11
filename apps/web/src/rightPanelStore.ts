@@ -12,7 +12,13 @@ import {
   scopedThreadKey,
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
-import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  IssueTrackerKind,
+  ThreadId,
+  type ScopedThreadRef,
+} from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
@@ -30,6 +36,8 @@ const RIGHT_PANEL_KINDS = [
   "terminal",
   "pull-request",
   "pull-requests",
+  "issue",
+  "issues",
 ] as const;
 export type RightPanelKind = (typeof RIGHT_PANEL_KINDS)[number];
 
@@ -85,7 +93,23 @@ export type RightPanelSurface =
       url?: string;
     }
   /** The thread's linked pull requests, one singleton tab beside any number of `pull-request` tabs. */
-  | { id: "pull-requests"; kind: "pull-requests" };
+  | { id: "pull-requests"; kind: "pull-requests" }
+  | {
+      /**
+       * One issue beside a thread, read through the thread's own environment. The reference lives
+       * in the id so several issues can stay open as peer tabs.
+       */
+      id: `issue:${string}`;
+      kind: "issue";
+      projectId: string;
+      tracker: IssueTrackerKind;
+      /** The tracker's own key for the issue, as its listing gave it. */
+      issueId: string;
+      /** How the tracker writes the issue's name, for the tab: `#123`, `ENG-123`. */
+      reference: string;
+    }
+  /** The thread project's issues, one singleton tab beside any number of `issue` tabs. */
+  | { id: "issues"; kind: "issues" };
 
 const RIGHT_PANEL_STORAGE_KEY = "t3code:right-panel-state:v2";
 // v9 removed the "plan" surface kind (plans render inline in the transcript).
@@ -93,7 +117,8 @@ const RIGHT_PANEL_STORAGE_KEY = "t3code:right-panel-state:v2";
 // v11 stops persisting the pull-request list's shared panel, so a restart opens the page fresh.
 // v12 adds the device surface.
 // v14 removes the agents surface; lineage lives in the thread title bar.
-const RIGHT_PANEL_STORAGE_VERSION = 14;
+// v15 adds the issue and issues surfaces.
+const RIGHT_PANEL_STORAGE_VERSION = 15;
 
 /** A fixed workspace-level ref: each PR surface carries its own real environment. */
 export const PULL_REQUESTS_PANEL_REF = scopeThreadRef(
@@ -146,7 +171,7 @@ interface RightPanelStoreState {
   ) => boolean;
   open: (
     ref: ScopedThreadRef,
-    kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request">,
+    kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request" | "issue">,
   ) => void;
   openDevice: (ref: ScopedThreadRef, target: DeviceTabTarget, automatic?: boolean) => void;
   renameDevice: (ref: ScopedThreadRef, surfaceId: string, title: string) => void;
@@ -164,6 +189,7 @@ interface RightPanelStoreState {
       url?: string;
     },
   ) => void;
+  openIssue: (ref: ScopedThreadRef, target: IssueSurfaceTarget) => void;
   openTerminal: (ref: ScopedThreadRef, terminalId: string) => void;
   splitTerminal: (
     ref: ScopedThreadRef,
@@ -191,7 +217,7 @@ interface RightPanelStoreState {
   toggleVisibility: (ref: ScopedThreadRef) => void;
   toggle: (
     ref: ScopedThreadRef,
-    kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request">,
+    kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request" | "issue">,
   ) => void;
   setThreadPanelOpen: (
     ref: ScopedThreadRef,
@@ -214,9 +240,11 @@ const DEFAULT_THREAD_PANEL_VISIBILITY: ThreadPanelVisibility = {
 };
 
 const singletonSurface = (
-  kind: Exclude<RightPanelKind, "file" | "preview" | "terminal" | "pull-request">,
+  kind: Exclude<RightPanelKind, "file" | "preview" | "terminal" | "pull-request" | "issue">,
 ): RightPanelSurface => {
   switch (kind) {
+    case "issues":
+      return { id: "issues", kind };
     case "diff":
       return { id: "diff", kind };
     case "files":
@@ -227,6 +255,22 @@ const singletonSurface = (
       return { id: "device", kind };
   }
 };
+
+const isIssueTracker = Schema.is(IssueTrackerKind);
+
+export type IssueSurface = Extract<RightPanelSurface, { kind: "issue" }>;
+export type IssueSurfaceTarget = Omit<IssueSurface, "id" | "kind">;
+
+export function issueSurface(target: IssueSurfaceTarget): IssueSurface {
+  return {
+    id: `issue:${encodeURIComponent(target.projectId)}:${encodeURIComponent(target.tracker)}:${encodeURIComponent(target.issueId)}`,
+    kind: "issue",
+    projectId: target.projectId,
+    tracker: target.tracker,
+    issueId: target.issueId,
+    reference: target.reference,
+  };
+}
 
 const browserSurface = (tabId: string | null): RightPanelSurface =>
   tabId
@@ -504,6 +548,15 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
                         }),
                       ];
                     }
+                    if (surface.kind === "issue") {
+                      const { projectId, tracker, issueId, reference } = surface;
+                      return typeof projectId === "string" &&
+                        isIssueTracker(tracker) &&
+                        typeof issueId === "string" &&
+                        typeof reference === "string"
+                        ? [issueSurface({ projectId, tracker, issueId, reference })]
+                        : [];
+                    }
                     if (surface.kind !== "terminal") return [surface];
                     if (
                       !("resourceId" in surface) ||
@@ -705,6 +758,12 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
                 }
               : next;
           }),
+        ),
+      openIssue: (ref, target) =>
+        set((state) =>
+          userAction(state, scopedThreadKey(ref), (current) =>
+            upsertSurface(current, issueSurface(target)),
+          ),
         ),
       openFile: (ref, requestedPath, line) =>
         set((state) =>

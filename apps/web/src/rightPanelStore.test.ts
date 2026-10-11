@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { useClosedViewStore } from "./closedViewStore";
 import {
+  issueSurface,
   migratePersistedRightPanelState,
   pullRequestSurface,
   pullRequestSurfaceId,
@@ -335,6 +336,54 @@ describe("rightPanelStore", () => {
     expect(selectThreadRightPanelState(byThreadKey, refA).maximized).toBe(true);
     expect(selectThreadRightPanelState(byThreadKey, refB).maximized).toBeUndefined();
     expect(store.getUserActionRevision(refA)).toBe(revision);
+  });
+
+  it("opens each issue as its own tab beside the issues list, once", () => {
+    const store = useRightPanelStore.getState();
+    const target = {
+      projectId: "project-a",
+      tracker: "github",
+      issueId: "42",
+      reference: "#42",
+    } as const;
+    store.open(refA, "issues");
+    store.openIssue(refA, target);
+    store.openIssue(refA, { ...target, issueId: "43", reference: "#43" });
+    store.openIssue(refA, target);
+    const state = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
+    expect(state.surfaces.map((surface) => surface.id)).toEqual([
+      "issues",
+      issueSurface(target).id,
+      issueSurface({ ...target, issueId: "43", reference: "#43" }).id,
+    ]);
+    expect(state.activeSurfaceId).toBe(issueSurface(target).id);
+    expect(state.isOpen).toBe(true);
+  });
+
+  it("keeps saved issue tabs and drops malformed ones during migration", () => {
+    const valid = issueSurface({
+      projectId: "project-a",
+      tracker: "github",
+      issueId: "42",
+      reference: "#42",
+    });
+    const migrated = migratePersistedRightPanelState({
+      byThreadKey: {
+        "env-1:thread-A": {
+          isOpen: true,
+          activeSurfaceId: valid.id,
+          surfaces: [
+            { id: "issues", kind: "issues" },
+            valid,
+            { ...valid, id: "issue:bad", tracker: "jira" },
+            { id: "issue:missing", kind: "issue", projectId: "project-a" },
+          ],
+        },
+      },
+    });
+    expect(
+      selectThreadRightPanelState(migrated.byThreadKey, refA).surfaces.map((surface) => surface.id),
+    ).toEqual(["issues", valid.id]);
   });
 
   it("restores a saved maximized panel during migration", () => {

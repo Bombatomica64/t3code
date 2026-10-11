@@ -288,6 +288,8 @@ import { PullRequestDetailGhost } from "./pullRequest/PullRequestGhosts";
 import { PullRequestsUnavailableState } from "./pullRequest/PullRequestsUnavailableState";
 import { RightPanelTabs } from "./RightPanelTabs";
 import { LinkPullRequestDialogHost } from "./pullRequest/LinkPullRequestDialog";
+import { IssueDetailPanel } from "./issue/IssueDetailPanel";
+import { ThreadIssuesPanel } from "./issue/ThreadIssuesPanel";
 import { ThreadPullRequestsPanel } from "./pullRequest/ThreadPullRequestsPanel";
 import { useDeviceState } from "~/state/device";
 import { DeviceSetup } from "./device/DeviceSetup";
@@ -5471,6 +5473,14 @@ export default function ChatView(props: ChatViewProps) {
     if (!activeThreadRef || !pullRequestsSurfaceAvailable) return;
     useRightPanelStore.getState().open(activeThreadRef, "pull-requests");
   }, [activeThreadRef, pullRequestsSurfaceAvailable]);
+  // Offered for any project on a server that reads issues; the panel itself explains a project
+  // with no tracker, which would otherwise cost every thread a read to find out.
+  const issuesSurfaceAvailable =
+    isServerThread && serverConfig?.environment.capabilities.issues === true && !!activeProject;
+  const addIssuesSurface = useCallback(() => {
+    if (!activeThreadRef || !issuesSurfaceAvailable) return;
+    useRightPanelStore.getState().open(activeThreadRef, "issues");
+  }, [activeThreadRef, issuesSurfaceAvailable]);
   const { state: deviceState, loaded: deviceStateLoaded } = useDeviceState(
     activeThreadRef?.environmentId ?? null,
   );
@@ -11175,6 +11185,19 @@ export default function ChatView(props: ChatViewProps) {
       />
     ) : renderedRightPanelSurface?.kind === "pull-requests" && activeThreadRef ? (
       <ThreadPullRequestsPanel threadRef={activeThreadRef} />
+    ) : renderedRightPanelSurface?.kind === "issues" && activeThreadRef ? (
+      <ThreadIssuesPanel threadRef={activeThreadRef} projectId={activeThread.projectId} />
+    ) : renderedRightPanelSurface?.kind === "issue" ? (
+      <IssueDetailPanel
+        key={renderedRightPanelSurface.id}
+        environmentId={activeThread.environmentId}
+        reference={{
+          projectId: renderedRightPanelSurface.projectId as ProjectId,
+          tracker: renderedRightPanelSurface.tracker,
+          id: renderedRightPanelSurface.issueId,
+        }}
+        cwd={activeWorkspaceRoot ?? activeProject?.workspaceRoot ?? ""}
+      />
     ) : renderedRightPanelSurface?.kind === "device" ? (
       <Suspense fallback={null}>
         <DevicePanel
@@ -12063,6 +12086,7 @@ export default function ChatView(props: ChatViewProps) {
           onAddFiles={addFilesSurface}
           onAddPullRequest={addPullRequestSurface}
           onAddPullRequests={addPullRequestsSurface}
+          onAddIssues={addIssuesSurface}
           onAddDevice={addDeviceSurface}
           browserAvailable={canOperatePreview && browserAvailable}
           terminalAvailable={activeProject !== null && canOperateTerminal}
@@ -12070,6 +12094,7 @@ export default function ChatView(props: ChatViewProps) {
           filesAvailable={activeProject !== null}
           pullRequestAvailable={pullRequestSurfaceAvailable}
           pullRequestsAvailable={pullRequestsSurfaceAvailable}
+          issuesAvailable={issuesSurfaceAvailable}
           deviceAvailable={activeThreadRef !== null}
         >
           {rightPanelContent}
@@ -12122,6 +12147,7 @@ export default function ChatView(props: ChatViewProps) {
             onAddFiles={addFilesSurface}
             onAddPullRequest={addPullRequestSurface}
             onAddPullRequests={addPullRequestsSurface}
+            onAddIssues={addIssuesSurface}
             onAddDevice={addDeviceSurface}
             browserAvailable={canOperatePreview && browserAvailable}
             terminalAvailable={activeProject !== null && canOperateTerminal}
@@ -12129,6 +12155,7 @@ export default function ChatView(props: ChatViewProps) {
             filesAvailable={activeProject !== null}
             pullRequestAvailable={pullRequestSurfaceAvailable}
             pullRequestsAvailable={pullRequestsSurfaceAvailable}
+            issuesAvailable={issuesSurfaceAvailable}
             deviceAvailable={activeThreadRef !== null}
           >
             {rightPanelContent}
